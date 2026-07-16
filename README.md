@@ -21,9 +21,11 @@ StateGraph runtime (portable `.cljc`, supervised superstep loop,
 interrupts, in-mem/Datomic checkpoints) -- the same actor pattern as
 every prior actor in this fleet -- here it is **StallMarketAdvisor
 ⊣ StallMarketGovernor**. This blueprint's own
-`:itonami.blueprint/governor` keyword, `:stall-market-governor`, is a
-distinct, independent build (no naming-collision precedent question --
-distinct from ISIC 4719's own `:merchandise-retail-governor`).
+`:itonami.blueprint/governor` keyword, `:stall-market-other-goods-governor`,
+is a distinct, independent build (no naming-collision precedent question --
+distinct from ISIC 4719's own `:merchandise-retail-governor`, ISIC 4781's
+own `:market-stall-retail-governor`, and ISIC 4782's own
+`:stall-market-governor`).
 
 > **Why an actor layer at all?** An LLM is great at drafting a sales-
 > record summary, a stall-placement proposal, or a supply-order request

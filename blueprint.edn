@@ -5,7 +5,7 @@
  :itonami.blueprint/license "AGPL-3.0-or-later"
  :itonami.blueprint/social-impact [:local-economy :informal-economy-formalization
                                     :consumer-protection :transparency]
- :itonami.blueprint/governor :stall-market-governor
+ :itonami.blueprint/governor :stall-market-other-goods-governor
  :itonami.blueprint/robotics true
  :itonami.blueprint/required-technologies [:robotics :identity :forms :dmn :bpmn :audit-ledger :retail]
  :itonami.blueprint/optional-technologies []

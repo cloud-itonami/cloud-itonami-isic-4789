@@ -32,7 +32,7 @@
 - support retainer with SLA
 
 ## Trust Controls
-- `:stall-market-governor` never lets a proposal for an
+- `:stall-market-other-goods-governor` never lets a proposal for an
   unregistered/permit-unverified stall commit or even escalate -- for
   ANY op, including `:coordinate-supply-order`
 - every proposal's `:effect` must be `:propose` -- a claim to directly
