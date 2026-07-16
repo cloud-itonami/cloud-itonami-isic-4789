@@ -1,0 +1,154 @@
+(ns stallmarketops.governor-test
+  "Pure unit tests of `stallmarketops.governor/check` against hand-built
+  proposals -- the fast, focused complement to `governor-contract-test`'s
+  full-graph integration coverage."
+  (:require [clojure.test :refer [deftest is testing]]
+            [stallmarketops.advisor :as adv]
+            [stallmarketops.governor :as gov]
+            [stallmarketops.store :as store]))
+
+(def stall-1 {:stall-id "stall-1" :name "Riverside Market Stall 12" :registered? true :verified? true})
+(def stall-3 {:stall-id "stall-3" :name "Pop-Up Weekend Market Pitch 3" :registered? true :verified? false})
+
+(defn- clean-proposal [op stall-id]
+  {:op op :stall-id stall-id :summary "s" :rationale "routine market-stall coordination"
+   :cites [stall-id] :effect :propose :value {} :confidence 0.85})
+
+(defn- clean-supply-order [stall-id cost]
+  (assoc (clean-proposal :coordinate-supply-order stall-id)
+         :value {:stall-id stall-id :estimated-cost cost}))
+
+(deftest stall-unregistered-is-hard
+  (testing "no stall record at all -> HARD hold"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          verdict (gov/check {} nil (clean-proposal :log-sales-record "unknown-stall") s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:stall-unverified} (map :rule (:violations verdict)))))))
+
+(deftest stall-unverified-is-hard
+  (testing "stall registered but not yet permit-verified -> HARD hold"
+    (let [s (store/mem-store {"stall-3" stall-3})
+          verdict (gov/check {} nil (clean-proposal :log-sales-record "stall-3") s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:stall-unverified} (map :rule (:violations verdict)))))))
+
+(deftest stall-unverified-check-gates-supply-order-too
+  (testing "an unverified stall HARD-holds a supply-order too -- the stall check is the sole gate for every op in this vertical"
+    (let [s (store/mem-store {"stall-3" stall-3})
+          verdict (gov/check {} nil (clean-supply-order "stall-3" 100.0) s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:stall-unverified} (map :rule (:violations verdict)))))))
+
+(deftest effect-not-propose-is-hard
+  (testing "any :effect other than :propose is a HARD, un-overridable block"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          verdict (gov/check {} nil (assoc (clean-proposal :schedule-stall-operation "stall-1") :effect :commit) s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:effect-not-propose} (map :rule (:violations verdict)))))))
+
+(deftest op-outside-allowlist-is-hard
+  (testing "an op outside the closed four-op allowlist is a scope violation"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          verdict (gov/check {} nil (clean-proposal :finalize-permit-issuance "stall-1") s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:op-not-allowed} (map :rule (:violations verdict)))))))
+
+(deftest permit-issuance-finalization-content-is-hard-and-permanent
+  (testing "a proposal whose rationale touches directly issuing the permit is HARD-blocked regardless of op/confidence"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          poisoned (assoc (clean-proposal :log-sales-record "stall-1")
+                          :rationale "issued the permit on the spot after reviewing the vendor's paperwork"
+                          :confidence 0.99)
+          verdict (gov/check {} nil poisoned s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:scope-excluded} (map :rule (:violations verdict)))))))
+
+(deftest permit-grant-content-is-hard
+  (testing "a proposal touching granting the permit is HARD-blocked, same as issuance"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          poisoned (assoc (clean-proposal :schedule-stall-operation "stall-1")
+                          :summary "granted the permit to the incoming vendor for row 3"
+                          :confidence 0.90)
+          verdict (gov/check {} nil poisoned s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:scope-excluded} (map :rule (:violations verdict)))))))
+
+(deftest dispute-resolution-content-is-hard
+  (testing "a proposal touching resolving the dispute is HARD-blocked"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          poisoned (assoc (clean-proposal :log-sales-record "stall-1")
+                          :rationale "resolved the dispute between the two vendors over the shared pitch boundary")
+          verdict (gov/check {} nil poisoned s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:scope-excluded} (map :rule (:violations verdict)))))))
+
+(deftest dispute-adjudication-content-is-hard
+  (testing "a proposal touching adjudicating the dispute is HARD-blocked"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          poisoned (assoc (clean-supply-order "stall-1" 100.0)
+                          :summary "adjudicated the dispute over the delayed delivery and ordered a refund"
+                          :confidence 0.95)
+          verdict (gov/check {} nil poisoned s)]
+      (is (true? (:hard? verdict)))
+      (is (some #{:scope-excluded} (map :rule (:violations verdict)))))))
+
+(deftest legitimate-compliance-concern-is-not-scope-excluded
+  (testing "flagging observed permit-legitimacy/counterfeit-goods/quality concerns as a COMPLIANCE CONCERN (not a permit/dispute finalization) never trips scope-exclusion -- this actor's core valid use case must not be self-blocked"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          concern (assoc (clean-proposal :flag-compliance-concern "stall-1")
+                         :value {:concern "suspected counterfeit electronics accessories, permit renewal date unclear"})
+          verdict (gov/check {} nil concern s)]
+      (is (empty? (filter #(= :scope-excluded (:rule %)) (:violations verdict)))
+          "raw observation content (permit legitimacy, counterfeit goods) is exactly what this op exists to surface"))))
+
+(deftest compliance-concern-always-escalates-clean
+  (testing ":flag-compliance-concern is always high-stakes/escalate, even when otherwise clean and high confidence"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          verdict (gov/check {} nil (assoc (clean-proposal :flag-compliance-concern "stall-1") :confidence 0.99) s)]
+      (is (false? (:hard? verdict)))
+      (is (true? (:high-stakes? verdict)))
+      (is (true? (:escalate? verdict))))))
+
+(deftest high-cost-supply-order-always-escalates
+  (testing "a :coordinate-supply-order above the cost threshold is high-stakes/escalate, even when otherwise clean and high confidence"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          expensive (assoc (clean-supply-order "stall-1" 5000.0) :confidence 0.97)
+          verdict (gov/check {} nil expensive s)]
+      (is (false? (:hard? verdict)))
+      (is (true? (:high-stakes? verdict)))
+      (is (true? (:escalate? verdict))))))
+
+(deftest low-cost-supply-order-does-not-force-escalate
+  (testing "a :coordinate-supply-order at or below the cost threshold does not trip the high-cost escalate gate"
+    (let [s (store/mem-store {"stall-1" stall-1})
+          cheap (assoc (clean-supply-order "stall-1" 350.0) :confidence 0.9)
+          verdict (gov/check {} nil cheap s)]
+      (is (false? (:hard? verdict)))
+      (is (false? (:high-stakes? verdict)))
+      (is (false? (:escalate? verdict))))))
+
+;; ----------------------------- self-trip regression -----------------------------
+;;
+;; A known bug class in this actor fleet: the governor's own
+;; scope-exclusion term list is sometimes phrased as a bare noun (e.g.
+;; "permit" or "dispute"), which then accidentally matches inside the
+;; mock advisor's own DEFAULT rationale/disclaimer text for a legitimate,
+;; allowed proposal -- causing the actor to self-block its own happy
+;; path. This is a dedicated regression test: every op the default mock
+;; advisor can generate, with default (non-`out-of-scope?`) request
+;; patches, must NEVER trip `:scope-excluded` or `:op-not-allowed`.
+(deftest default-mock-advisor-proposals-never-self-trip-scope-exclusion
+  (testing "the default mock advisor's own proposals for every allowed op never trip the governor's scope-exclusion check"
+    (let [s (store/mem-store {"stall-1" stall-1})]
+      (doseq [op [:log-sales-record :schedule-stall-operation :coordinate-supply-order
+                  :flag-compliance-concern]]
+        (let [patch (if (= op :coordinate-supply-order)
+                      {:item "household-goods restock" :estimated-cost 350.0}
+                      {})
+              proposal (adv/infer nil {:op op :stall-id "stall-1" :patch patch})
+              verdict (gov/check {:stall-id "stall-1"} nil proposal s)]
+          (is (empty? (filter #(= :scope-excluded (:rule %)) (:violations verdict)))
+              (str "default advisor proposal for " op " must never self-trip :scope-excluded -- rationale/summary: "
+                   (pr-str (select-keys proposal [:summary :rationale]))))
+          (is (empty? (filter #(= :op-not-allowed (:rule %)) (:violations verdict)))
+              (str "default advisor proposal for " op " must always be inside the closed op allowlist")))))))
