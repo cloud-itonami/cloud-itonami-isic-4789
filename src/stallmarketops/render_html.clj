@@ -20,7 +20,7 @@
   Usage: `clojure -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
   (:require [jp-go-dds.skin]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [stallmarketops.store :as store]
             [stallmarketops.advisor :as advisor]
             [stallmarketops.operation :as op]
