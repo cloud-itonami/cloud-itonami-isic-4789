@@ -164,14 +164,14 @@ clojure -M:run
 
 ### Test suite
 
-- `test/stallmarketops/governor_test.clj` -- unit tests of governor hard
+- `test/stallmarketops/governor_test.cljk` -- unit tests of governor hard
   checks, scope exclusion, and the self-trip regression test
-- `test/stallmarketops/advisor_test.clj` -- advisor proposal shape and
+- `test/stallmarketops/advisor_test.cljk` -- advisor proposal shape and
   consistency
-- `test/stallmarketops/phase_test.clj` -- rollout phase logic
-- `test/stallmarketops/governor_contract_test.clj` -- full graph
+- `test/stallmarketops/phase_test.cljk` -- rollout phase logic
+- `test/stallmarketops/governor_contract_test.cljk` -- full graph
   integration, audit trail
-- `test/stallmarketops/store_contract_test.clj` -- Store protocol and
+- `test/stallmarketops/store_contract_test.cljk` -- Store protocol and
   MemStore implementation
 
 ### Modules
