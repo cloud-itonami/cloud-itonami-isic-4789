@@ -1,6 +1,6 @@
 (ns stallmarketops.advisor-test
   "Unit tests of `stallmarketops.advisor` proposal generation."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [stallmarketops.advisor :as adv]
             [stallmarketops.store :as store]))
 
