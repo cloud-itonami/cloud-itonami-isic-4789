@@ -1,0 +1,33 @@
+;; What this vertical's robot physically does, declared for
+;; kotoba.robotics.process (kotoba-lang/robotics). `kbb -M:dev:physics` runs it.
+;;
+;; README "Robotics premise": a robot may perform the physical work of a
+;; general-goods market stall (ISIC 4789) -- unloading, display setup. Here:
+;; an arm unloading boxes of goods from the van onto the display table, and
+;; a powered trolley taking the stall kit (table, canopy, stock) up a
+;; sloping market street to the pitch.
+;;
+;; Every number without a cited source is marked `estimate` in its :basis.
+;; Replacing an estimate with a sourced value is this bot's growth work.
+{:physics/schema "itonami.physical-ai.spec.v1"
+ :repo "cloud-itonami/cloud-itonami-isic-4789"
+ :cases
+ [{:id :goods-box-van-to-table
+   :kind :manipulator
+   :procedure "arm lifts a box of goods from the van's load floor onto the stall's display table"
+   :params {:l1-m 0.55 :l2-m 0.50 :m1-kg 5.0 :m2-kg 3.5
+            :from [0.65 0.05] :to [0.70 0.35] :duration-s 2.0 :steps 400}
+   :sweep {:param :payload-kg :values [2.0 5.0 8.0 12.0 16.0]}
+   :quantity :peak-tau1-nm
+   :limit {:max 100.0 :basis "estimate: continuous shoulder torque of a ~8 kg-payload collaborative arm"}
+   :boundary {:lo 0.5 :hi 50.0}}
+  {:id :stall-kit-trolley-uphill
+   :kind :transport
+   :procedure "powered trolley carries the stall kit (folding table, canopy, weights, stock; 120 kg) 60 m up the market street to the pitch"
+   :params {:mass-kg 35.0 :payload-kg 120.0 :distance-m 60.0 :v-max-mps 1.0 :a-max-mps2 0.4
+            :brake-decel-mps2 1.0 :drive-force-n 180.0 :crr 0.02 :cog-height-m 0.35 :payload-cog-height-m 0.55
+            :support-half-length-m 0.40 :max-time-s 900.0}
+   :sweep {:param :slope-deg :values [0.0 2.0 3.0 4.0 5.0 6.0]}
+   :quantity :cycle-time-s
+   :limit {:max 90.0 :basis "estimate: the haul to the pitch should take under ~1.5 min so setup fits the pre-opening window; a stall is out of tolerance"}
+   :boundary {:lo 0.0 :hi 10.0}}]}
